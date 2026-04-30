@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Insight Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Source+Serif+4:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head>
+<body>
+  <main class="page-shell">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Business analytics reporting</p>
+        <h1>Turn structured CSV data into executive summaries, chart explanations, anomaly commentary, and action points.</h1>
+        <p class="lede">Designed for monthly performance reporting workflows, this application helps analytics teams upload structured data and automatically generate dashboards, chart-to-text narratives, trend-based summaries, and recommended next steps.</p>
+        <div class="hero-points">
+          <div class="hero-point"><span>Input</span><strong>Sales, KPI, and trend datasets</strong></div>
+          <div class="hero-point"><span>Output</span><strong>Executive-ready monthly performance report</strong></div>
+          <div class="hero-point"><span>Highlights</span><strong>Chart-to-text, anomaly commentary, and recommendations</strong></div>
+        </div>
+      </div>
+      <form id="upload-form" class="upload-card">
+        <label for="file-input" class="upload-label">Upload monthly performance dataset</label>
+        <input id="file-input" name="file" type="file" accept=".csv,.xlsx,.xls" required>
+        <button type="submit">Generate Performance Report</button>
+        <p id="status-text" class="status-text">Waiting for a CSV or Excel file.</p>
+      </form>
+    </section>
+
+    <section class="workflow-strip">
+      <article class="workflow-card">
+        <span>01</span>
+        <h2>Structured Input</h2>
+        <p>Upload sales data, KPI metrics, or monthly and weekly performance records.</p>
+      </article>
+      <article class="workflow-card">
+        <span>02</span>
+        <h2>Automated Analysis</h2>
+        <p>The app infers schema, builds charts, checks data quality, and detects anomalies.</p>
+      </article>
+      <article class="workflow-card">
+        <span>03</span>
+        <h2>Narrative Output</h2>
+        <p>Receive executive summaries, chart commentary, trend narratives, and recommended actions.</p>
+      </article>
+    </section>
+
+    <section id="results" class="results hidden">
+      <div class="utility-row">
+        <div class="panel schema-panel">
+          <div class="panel-header">
+            <h2>Dataset Profile</h2>
+            <span id="file-meta"></span>
+          </div>
+          <div class="chip-group" id="schema-chips"></div>
+          <div class="quality-grid" id="quality-grid"></div>
+        </div>
+        <div class="panel mapping-panel">
+          <div class="panel-header">
+            <h2>Manual Mapping</h2>
+            <button id="report-button" type="button" class="secondary-button">Export PDF</button>
+          </div>
+          <form id="mapping-form" class="mapping-form">
+            <label>Primary metric<select id="primary-metric-select"></select></label>
+            <label>Primary dimension<select id="primary-dimension-select"></select></label>
+            <label>Secondary dimension<select id="secondary-dimension-select"></select></label>
+            <label>Time column<select id="time-column-select"></select></label>
+            <button type="submit">Re-run with Mapping</button>
+          </form>
+        </div>
+      </div>
+
+      <div id="kpi-grid" class="kpi-grid"></div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Executive Summary</h2>
+          <span id="analysis-source"></span>
+        </div>
+        <p id="summary-text"></p>
+      </div>
+
+      <div class="utility-row">
+        <div class="panel">
+          <h2>Chart-to-Text Explanation</h2>
+          <ul id="chart-explanations-list"></ul>
+        </div>
+        <div class="panel">
+          <h2>Trend Narrative</h2>
+          <div id="trend-narrative" class="narrative-card"></div>
+        </div>
+      </div>
+
+      <div id="chart-grid" class="chart-grid"></div>
+
+      <div class="insight-grid">
+        <div class="panel">
+          <h2>Recommended Action Points</h2>
+          <ul id="recommendations-list"></ul>
+        </div>
+        <div class="panel">
+          <h2>Risk Insights</h2>
+          <ul id="risks-list"></ul>
+        </div>
+        <div class="panel">
+          <h2>Opportunity Areas</h2>
+          <ul id="opportunities-list"></ul>
+        </div>
+      </div>
+
+      <div class="utility-row">
+        <div class="panel">
+          <h2>Anomaly Commentary</h2>
+          <div id="anomalies-list" class="anomaly-list"></div>
+        </div>
+        <div class="panel chat-panel">
+          <h2>Report Assistant</h2>
+          <form id="chat-form" class="chat-form">
+            <textarea id="chat-question" placeholder="Ask a question like: What is driving this month's performance trend?" required></textarea>
+            <button type="submit">Ask Assistant</button>
+          </form>
+          <div id="chat-response" class="chat-response">Ask a question after analysis to get a dataset-aware answer.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const uploadForm = document.getElementById("upload-form");
+    const mappingForm = document.getElementById("mapping-form");
+    const chatForm = document.getElementById("chat-form");
+    const reportButton = document.getElementById("report-button");
+    const fileInput = document.getElementById("file-input");
+    const statusText = document.getElementById("status-text");
+    const results = document.getElementById("results");
+    const summaryText = document.getElementById("summary-text");
+    const fileMeta = document.getElementById("file-meta");
+    const analysisSource = document.getElementById("analysis-source");
+    const kpiGrid = document.getElementById("kpi-grid");
+    const chartGrid = document.getElementById("chart-grid");
+    const anomaliesList = document.getElementById("anomalies-list");
+    const schemaChips = document.getElementById("schema-chips");
+    const qualityGrid = document.getElementById("quality-grid");
+    const chatResponse = document.getElementById("chat-response");
+    const trendNarrative = document.getElementById("trend-narrative");
+    const primaryMetricSelect = document.getElementById("primary-metric-select");
+    const primaryDimensionSelect = document.getElementById("primary-dimension-select");
+    const secondaryDimensionSelect = document.getElementById("secondary-dimension-select");
+    const timeColumnSelect = document.getElementById("time-column-select");
+
+    let currentAnalysisId = null;
+
+    const renderList = (elementId, items) => {
+      const element = document.getElementById(elementId);
+      element.innerHTML = "";
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        element.appendChild(li);
+      });
+    };
+
+    const buildSelectOptions = (select, values, selectedValue, allowBlank = false) => {
+      select.innerHTML = "";
+      if (allowBlank) {
+        const blank = document.createElement("option");
+        blank.value = "";
+        blank.textContent = "None";
+        select.appendChild(blank);
+      }
+      values.forEach((value) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        option.selected = value === selectedValue;
+        select.appendChild(option);
+      });
+    };
+
+    const renderSchema = (payload) => {
+      schemaChips.innerHTML = "";
+      const chipItems = [
+        ["Primary metric", payload.schema.inferred_primary_metric || "None"],
+        ["Primary dimension", payload.schema.inferred_primary_dimension || "None"],
+        ["Secondary dimension", payload.schema.inferred_secondary_dimension || "None"],
+        ["Time column", payload.schema.inferred_time_column || "None"]
+      ];
+      chipItems.forEach(([label, value]) => {
+        const chip = document.createElement("div");
+        chip.className = "schema-chip";
+        chip.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+        schemaChips.appendChild(chip);
+      });
+
+      qualityGrid.innerHTML = "";
+      const qualityItems = [
+        ["Completeness", `${payload.data_quality.completeness_pct}%`],
+        ["Missing cells", payload.data_quality.missing_cells],
+        ["Duplicate rows", payload.data_quality.duplicate_rows],
+        ["Duplicate columns", payload.data_quality.duplicate_columns]
+      ];
+      qualityItems.forEach(([label, value]) => {
+        const card = document.createElement("div");
+        card.className = "quality-card";
+        card.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+        qualityGrid.appendChild(card);
+      });
+    };
+
+    const renderDashboard = (payload) => {
+      currentAnalysisId = payload.analysis_id;
+      results.classList.remove("hidden");
+      summaryText.textContent = payload.insights.executive_summary;
+      fileMeta.textContent = `${payload.filename} - ${payload.row_count} rows`;
+      analysisSource.textContent = payload.metrics.has_time_dimension ? "Monthly trend-aware analysis" : "Snapshot analysis";
+
+      renderSchema(payload);
+      renderList("chart-explanations-list", payload.insights.chart_explanations);
+      trendNarrative.textContent = payload.metrics.has_time_dimension
+        ? `The current report uses ${payload.metrics.primary_metric} as the main measure and tracks how it changes over time so analysts can explain trend direction, turning points, and unusual shifts.`
+        : `No reliable time column was inferred, so this report focuses on segment comparison, metric distribution, and structural patterns instead of month-over-month trends.`;
+
+      buildSelectOptions(primaryMetricSelect, payload.schema.numeric_columns, payload.schema.applied_mapping.primary_metric || payload.schema.inferred_primary_metric);
+      buildSelectOptions(primaryDimensionSelect, payload.schema.categorical_columns, payload.schema.applied_mapping.primary_dimension || payload.schema.inferred_primary_dimension, true);
+      buildSelectOptions(secondaryDimensionSelect, payload.schema.categorical_columns, payload.schema.applied_mapping.secondary_dimension || payload.schema.inferred_secondary_dimension, true);
+      buildSelectOptions(timeColumnSelect, payload.schema.columns, payload.schema.applied_mapping.time_column || payload.schema.inferred_time_column, true);
+
+      kpiGrid.innerHTML = "";
+      payload.kpis.forEach((kpi) => {
+        const card = document.createElement("article");
+        card.className = "kpi-card";
+        card.innerHTML = `<p>${kpi.label}</p><strong>${kpi.value}</strong><span>${kpi.delta || ""}</span>`;
+        kpiGrid.appendChild(card);
+      });
+
+      chartGrid.innerHTML = "";
+      payload.charts.forEach((chart, index) => {
+        const wrapper = document.createElement("article");
+        wrapper.className = "panel chart-panel";
+        const chartId = `chart-${index}`;
+        wrapper.innerHTML = `<div class="panel-header"><h2>${chart.title}</h2></div><p>${chart.description}</p><div id="${chartId}" class="chart-host"></div>`;
+        chartGrid.appendChild(wrapper);
+        Plotly.newPlot(chartId, chart.figure.data, chart.figure.layout, { responsive: true, displayModeBar: false });
+      });
+
+      renderList("recommendations-list", payload.insights.recommendations);
+      renderList("risks-list", payload.insights.risks);
+      renderList("opportunities-list", payload.insights.opportunities);
+
+      anomaliesList.innerHTML = "";
+      if (payload.anomalies.length === 0) {
+        anomaliesList.innerHTML = "<p>No major anomalies detected.</p>";
+      } else {
+        payload.anomalies.forEach((anomaly) => {
+          const card = document.createElement("article");
+          card.className = "anomaly-card";
+          card.innerHTML = `<strong>${anomaly.metric} - ${anomaly.period}</strong><p>${anomaly.explanation}</p><span>${anomaly.severity.toUpperCase()} | ${anomaly.value}</span>`;
+          anomaliesList.appendChild(card);
+        });
+      }
+    };
+
+    const runAnalysis = async (mapping = {}) => {
+      const file = fileInput.files[0];
+      if (!file) {
+        statusText.textContent = "Choose a CSV or Excel file first.";
+        return;
+      }
+
+      statusText.textContent = "Analyzing dataset...";
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("mapping", JSON.stringify(mapping));
+
+      const response = await fetch("/api/analyze", { method: "POST", body: formData });
+      const rawText = await response.text();
+      let payload = null;
+      try {
+        payload = JSON.parse(rawText);
+      } catch {
+        payload = null;
+      }
+      if (!response.ok) {
+        throw new Error(payload?.detail || rawText || "Analysis failed");
+      }
+      if (!payload) {
+        throw new Error("The server returned an unexpected response.");
+      }
+      renderDashboard(payload);
+      statusText.textContent = "Analysis complete.";
+    };
+
+    uploadForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        await runAnalysis({});
+      } catch (error) {
+        statusText.textContent = error.message;
+      }
+    });
+
+    mappingForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try {
+        await runAnalysis({
+          primary_metric: primaryMetricSelect.value || null,
+          primary_dimension: primaryDimensionSelect.value || null,
+          secondary_dimension: secondaryDimensionSelect.value || null,
+          time_column: timeColumnSelect.value || null
+        });
+      } catch (error) {
+        statusText.textContent = error.message;
+      }
+    });
+
+    chatForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!currentAnalysisId) {
+        chatResponse.textContent = "Analyze a dataset first.";
+        return;
+      }
+      const formData = new FormData();
+      formData.append("analysis_id", currentAnalysisId);
+      formData.append("question", document.getElementById("chat-question").value);
+      const response = await fetch("/api/chat", { method: "POST", body: formData });
+      const payload = await response.json();
+      if (!response.ok) {
+        chatResponse.textContent = payload.detail || "Chat request failed.";
+        return;
+      }
+      chatResponse.textContent = `${payload.answer} (${payload.source})`;
+    });
+
+    reportButton.addEventListener("click", () => {
+      if (!currentAnalysisId) {
+        statusText.textContent = "Analyze a dataset before exporting a report.";
+        return;
+      }
+      window.open(`/api/report/${currentAnalysisId}`, "_blank");
+    });
+  </script>
+</body>
+</html>
